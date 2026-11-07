@@ -769,6 +769,32 @@ body{font-family:'Nunito','Arial Rounded MT Bold',sans-serif;background:#087dc2}
 }
 @media(max-height:600px) and (min-width:601px){#question-area{top:52px}#bubble-safe-zone{top:140px}.ocean-cover{width:min(58vw,78vh)}}
 
+
+/* Mobile: four clean answer lanes; no collision during the gentle movement */
+@keyframes bubbleBobMobile {
+  0%, 100% {transform:translateY(0)}
+  50% {transform:translateY(-3px)}
+}
+@media (max-width:600px), (max-height:520px) {
+  #bubble-safe-zone {overflow:hidden}
+  .bubble.mobile-lane-bubble {margin-left:0!important; touch-action:manipulation;}
+  .bubble.mobile-lane-bubble .bubble-verb1,
+  .bubble.mobile-lane-bubble .bubble-verb2 {overflow-wrap:anywhere; max-width:94%; line-height:1.05}
+  .bubble.mobile-lane-bubble.golden {animation:bubbleBobMobile 4.5s ease-in-out infinite!important}
+}
+@media (max-width:600px) and (max-height:660px) {
+ #bubble-safe-zone{top:134px;bottom:36px}
+ #question-area{top:51px}
+ #yula-game-emblem{top:40px;width:51px;height:51px}
+}
+@media (max-height:520px) and (min-width:601px) {
+ #bubble-safe-zone{top:120px;bottom:18px}
+ #question-area{top:45px;padding:5px 12px}
+ #question-verb{font-size:28px}
+ #question-hint{font-size:10px}
+ #yula-game-emblem{top:50px;width:55px;height:55px}
+}
+
 </style>
 </head>
 <body>
@@ -1373,7 +1399,10 @@ function createBubbles(question) {
 
   // Larger bubbles - use less padding between them
   const isNarrow = fieldW < 610;
-  const bubbleSize = isNarrow ? Math.min(138, Math.max(85, (fieldW - 38) / 2.32)) : Math.min(170, Math.max(120, fieldW / (numBubbles * 1.35)));
+  const compactField = isNarrow || window.innerWidth <= 600 || window.innerHeight <= 520;
+  const bubbleSize = compactField
+    ? Math.max(62, Math.min(138, (fieldW - 34) / 2.32, (fieldH - 32) / 2.42))
+    : Math.min(170, Math.max(120, fieldW / (numBubbles * 1.35)));
   const spacing = fieldW / (numBubbles + 1);
 
   gameState.currentBubbleSize = bubbleSize;
@@ -1385,17 +1414,21 @@ function createBubbles(question) {
     bubble.style.width = size + 'px';
     bubble.style.height = size + 'px';
 
-    const fs1 = Math.max(18, size * 0.20);
-    const fs2 = Math.max(16, size * 0.18);
-    const fsSep = Math.max(12, size * 0.12);
+    const fs1 = compactField ? Math.max(12, Math.min(25, size * 0.18)) : Math.max(18, size * 0.20);
+    const fs2 = compactField ? Math.max(12, Math.min(23, size * 0.17)) : Math.max(16, size * 0.18);
+    const fsSep = compactField ? Math.max(9, size * 0.10) : Math.max(12, size * 0.12);
     bubble.style.setProperty('--bub-fs1', fs1 + 'px');
     bubble.style.setProperty('--bub-fs2', fs2 + 'px');
     bubble.style.setProperty('--bub-fs-sep', fsSep + 'px');
 
-    const startX = isNarrow ? (fieldW * ((idx % 2) ? 0.73 : 0.27) - size / 2) : (spacing * (idx + 1) - size / 2);
-    const maxTop = fieldH - size;
+    // On phones use four separate 2×2 lanes. Each lane has permanent bounds.
+    const startX = compactField
+      ? Math.max(4, Math.min(fieldW - size - 4, ((idx % 2) + 0.5) * fieldW / 2 - size / 2))
+      : (spacing * (idx + 1) - size / 2);
+    const maxTop = Math.max(0, fieldH - size);
     const minTop = fieldH * 0.25;
-    const startY = isNarrow ? Math.max(8, fieldH * ((idx < 2) ? 0.13 : 0.55) + (Math.random() * 14 - 7)) : minTop + Math.random() * (maxTop - minTop);
+    const laneTop = idx < 2 ? 8 : Math.max(8, fieldH - size - 8);
+    const startY = compactField ? Math.min(maxTop, laneTop) : minTop + Math.random() * Math.max(0, maxTop - minTop);
     bubble.style.left = startX + 'px';
     bubble.style.top = startY + 'px';
 
@@ -1403,8 +1436,15 @@ function createBubbles(question) {
     const driftDur = (3 + Math.random() * 3) + 's';
     bubble.style.setProperty('--float-dur', floatDur);
     bubble.style.setProperty('--drift-dur', driftDur);
-    bubble.style.animation = `bubbleFloat ${floatDur} ease-in-out infinite, bubbleDrift ${driftDur} ease-in-out infinite`;
-    bubble.style.animationDelay = `${Math.random() * 2}s, ${Math.random() * 2}s`;
+    if (compactField) {
+      bubble.classList.add('mobile-lane-bubble');
+      // Only a 3px gentle movement, so other answers never overlap.
+      bubble.style.animation = `bubbleBobMobile ${4 + idx * 0.45}s ease-in-out infinite`;
+      bubble.style.animationDelay = `${-idx * 0.3}s`;
+    } else {
+      bubble.style.animation = `bubbleFloat ${floatDur} ease-in-out infinite, bubbleDrift ${driftDur} ease-in-out infinite`;
+      bubble.style.animationDelay = `${Math.random() * 2}s, ${Math.random() * 2}s`;
+    }
 
     bubble.innerHTML = `
       <span class="bubble-verb1">${opt.v1}</span>
@@ -1655,6 +1695,8 @@ function animateBubbles() {
 
   gameState.bubbleElements.forEach(b => {
     if (b.el.classList.contains('popping') || b.el.classList.contains('wrong')) return;
+    // Don't scroll fixed phone bubbles between lanes.
+    if (b.el.classList.contains('mobile-lane-bubble')) return;
     let currentTop = parseFloat(b.el.style.top);
     currentTop -= speed;
 
