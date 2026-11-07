@@ -1209,7 +1209,7 @@ const allVerbs = [
   { inf: 'DO', v1: 'did', v2: 'done' },
   { inf: 'MAKE', v1: 'made', v2: 'made' },
   { inf: 'SAY', v1: 'said', v2: 'said' },
-  { inf: 'GET', v1: 'got', v2: 'gotten' },
+  { inf: 'GET', v1: 'got', v2: 'got' },
   { inf: 'PUT', v1: 'put', v2: 'put' },
   { inf: 'HIT', v1: 'hit', v2: 'hit' },
   { inf: 'SET', v1: 'set', v2: 'set' },
@@ -1217,26 +1217,50 @@ const allVerbs = [
 ];
 
 function generateWrongForms(verb) {
+  // Each question must have exactly one correct pair and three distinct distractors.
+  // A pair is wrong if EITHER of its forms is wrong (not necessarily both).
+  const base = verb.inf.toLowerCase();
+  const correctKey = `${verb.v1}|${verb.v2}`;
+  const used = new Set([correctKey]);
   const wrongs = [];
-  const strategies = [
-    { v1: verb.inf.toLowerCase() + 'ed', v2: verb.inf.toLowerCase() + 'ed' },
-    { v1: verb.inf.toLowerCase() + 'ed', v2: verb.v2 },
-    { v1: verb.v1, v2: verb.inf.toLowerCase() + 'ed' },
-    { v1: verb.v2, v2: verb.v1 },
-    { v1: verb.v1, v2: verb.v1 },
-    { v1: verb.inf.toLowerCase() + 'd', v2: verb.inf.toLowerCase() + 't' },
+  const candidatePairs = [
+    [verb.v2, verb.v1],
+    [verb.v1, verb.v1],
+    [verb.v2, verb.v2],
+    [base, verb.v2],
+    [verb.v1, base],
+    [base, base],
+    [base + 'ed', base + 'ed'],
+    [base + 'ed', verb.v2],
+    [verb.v1, base + 'ed'],
+    [base + 'd', base + 't'],
+    [base + 's', base + 'ed'],
+    [base + 'ing', base + 'ed'],
   ];
-  const used = new Set();
-  const shuffled = strategies.sort(() => Math.random() - 0.5);
-  for (const s of shuffled) {
-    const key = s.v1 + '|' + s.v2;
-    if (!used.has(key) && s.v1 !== verb.v1 && s.v2 !== verb.v2) {
-      used.add(key); wrongs.push(s);
+  for (const [v1, v2] of shuffle(candidatePairs)) {
+    const key = `${v1}|${v2}`;
+    if (!used.has(key)) {
+      used.add(key);
+      wrongs.push({ v1, v2 });
+      if (wrongs.length === 3) break;
     }
-    if (wrongs.length >= 3) break;
   }
   return wrongs;
 }
+
+// Built-in checks: prevent impossible or ambiguous rounds after editing the verb list.
+function validateVerbQuestions() {
+  for (const verb of allVerbs) {
+    const wrongs = generateWrongForms(verb);
+    const options = [{ v1: verb.v1, v2: verb.v2 }, ...wrongs];
+    const keys = options.map(v => `${v.v1}|${v.v2}`);
+    if (options.length !== 4 || new Set(keys).size !== 4 ||
+        keys.filter(key => key === `${verb.v1}|${verb.v2}`).length !== 1) {
+      throw new Error(`Invalid answer choices for ${verb.inf}`);
+    }
+  }
+}
+validateVerbQuestions();
 
 // ========== GAME STATE ==========
 let gameState = {
